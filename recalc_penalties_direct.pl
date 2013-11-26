@@ -112,9 +112,11 @@ if($valid)
 		my $mobutil = new Mobiusutil();
 		my @usrcreds = @{createDBUser($dbHandler,$mobutil,"1")};
 		
+		
 		if(@usrcreds[3])
 		{
 			print "Ok - I am connected to:\n".$conf{"dbhost"}."\n".$conf{"db"}."\n".$conf{"dbuser"}."\n".$conf{"dbpass"}."\n".$conf{"port"}."\n";
+			OpenSRF::System->bootstrap_client(config_file => '/openils/conf/opensrf_core.xml'); 
 			my $script = OpenILS::Utils::Cronscript->new;
 			my $authtoken = $script->authenticate(
 				{
@@ -124,20 +126,36 @@ if($valid)
 				}
 			);
 			
+			
 			my $query = "select usr from action.circulation where due_date> (now()-('48 hours'::interval)) and xact_finish is null and checkin_time is null and usr in(select usr from actor.usr_standing_penalty where standing_penalty not in(1,2,3,4))";
-			my @results = @{$dbHandler->query($query)};
+			my @tem = (33655); #test user that I updated to have a lot of overdues
+			my @results =([@tem]);# @{$dbHandler->query($query)};
 			$log->addLogLine("Got: ". $#results." users to check");
 			print "Got: ". $#results." users to check\n";
+			my $session = OpenSRF::AppSession->create('open-ils.actor');
 			foreach(@results)
 			{
+				print "row\n";
 				my $row = $_;
 				my @row = @{$row};
 				foreach(@row)
 				{
-					
+					my $userID = $_;
+					try 
+					{
+						my $r = $session->request('open-ils.actor.user.penalties.update', $authtoken,  $userID );
+						print Dumper $r;
+            
+					} 
+					catch Error with 
+					{
+						my $err = shift;
+						print "Error: $err\n";
+					}
 				}
 			}
-			deleteDBUser($dbHandler,@usrcreds);
+			$session->finish();
+			#deleteDBUser($dbHandler,\@usrcreds);
 		}
 		else
 		{
@@ -198,50 +216,27 @@ sub createDBUser
 	my $pass = $mobiusUtil->generateRandomString(10);
 	
 	my %params = map { $_ => 1 } @results;
-	my $int = 0;
-	my $stop = 0;
-	while(!$stop)
-	{
-		my $query = "select usrname from actor.usr where upper(usrname) = upper('$usr')";
-		my @results = @{$dbHandler->query($query)};
-		if($#results>-1)
-		{
-			$usr.=$int;
-			$int++;
-		}
-		else
-		{
-			$stop=1;
-		}
-	}
 	
-	my $stop = 0;
-	while(!$stop)
+	my $query = "select usrname from actor.usr where upper(usrname) = upper('$usr')";
+	my @results = @{$dbHandler->query($query)};
+	my $result = 1;
+	if($#results==-1)
 	{
-		my $query = "select name from actor.workstation where upper(name) = upper('$workstation')";
+		$query = "INSERT INTO actor.usr (profile, usrname, passwd, ident_type, first_given_name, family_name, home_ou) VALUES ('25', E'$usr', E'$pass', '3', 'Script', 'Script User', E'$org_unit_id')";
+		$result = $dbHandler->update($query);
+	}
+	if($result)
+	{
+		$query = "select name from actor.workstation where upper(name) = upper('$workstation') and owning_lib=$org_unit_id ";
 		my @results = @{$dbHandler->query($query)};
-		if($#results>-1)
+		if($#results==-1)
 		{
-			$workstation.=$int;
-			$int++;
-		}
-		else
-		{
-			$stop=1;
+			$query = "INSERT INTO actor.workstation (name, owning_lib) VALUES (E'$workstation', E'$org_unit_id')";		
+			$result = $dbHandler->update($query);
 		}
 	}
 	print "User: $usr\npass: $pass\nWorkstation: $workstation";
 	
-	
-	$query = "INSERT INTO actor.usr (profile, usrname, passwd, ident_type, first_given_name, family_name, home_ou) VALUES ('25', E'$usr', E'$pass', '3', 'Script', 'Script User', E'$org_unit_id')";
-	$result = $dbHandler->update($query);
-	print "Creation of userid: $result\n";
-	if($result)
-	{
-		$query = "INSERT INTO actor.workstation (name, owning_lib) VALUES (E'$workstation', E'$org_unit_id')";		
-		$result = $dbHandler->update($query);
-		print "Creation of workstation: $result\n";
-	}
 	@ret = ($usr, $pass, $workstation, $result);
 	return \@ret;
 }
@@ -251,8 +246,10 @@ sub deleteDBUser
 	my $dbHandler = @_[0];
 	my @usrcreds = @{@_[1]};
 	my $query = "delete from actor.usr where usrname='".@usrcreds[0]."'";
+	print $query."\n";
 	$dbHandler->update($query);	
 	$query = "delete from actor.workstation where name='".@usrcreds[2]."'";
+	print $query."\n";
 	$dbHandler->update($query);
 }
 
