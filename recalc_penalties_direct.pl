@@ -124,7 +124,7 @@ if($valid)
 			my $row = $_;
 			my @row = @{$row};
 			my $userID = @row[0];
-			$output.=$userID.",";
+			
 			my $ou = @row[1];
 			
 			if($lastou!=$ou)
@@ -159,6 +159,7 @@ if($valid)
 					$after = $after-$before;
 					if($after>0)
 					{
+						$output.=$userID.",";
 						$updatecount++;
 						$log->addLogLine("user: $userID home: $ou");
 						$log->addLogLine("Added $after row(s) to actor.usr_standing_penalty\n results:\n");
