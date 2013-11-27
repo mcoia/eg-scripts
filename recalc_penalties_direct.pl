@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Copyright 2011 Traverse Area District Library
-# Author: Jeff Godin
+# Author: Blake Graham-Henderson
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -20,24 +20,19 @@
 
 # Script to do a mass re-calculation of system standing penalies 
 # Useful for updating penalties after policy/config changes
-#
 
-# An example query to fetch patron IDs to re-calculate
-# 
-# -- select patron ids who have a PATRON_EXCEEDS_FINES penalty
-# -- with relevant home_ou and whose fines are now acceptable
-# 
-# select au.id from actor.usr as au 
-# join actor.usr_standing_penalty as ausp on (ausp.usr = au.id)
-# left join money.materialized_billable_xact_summary as mmbxs on (mmbxs.usr = au.id)
-# where au.home_ou between START_HOME_OU and END_HOME_OU
-# and ausp.standing_penalty = 1
-# group by au.id
-# having sum(mmbxs.balance_owed) < 25;
-# 
+# This script will create a user in actor.usr and a workstation in actor.workstation 
+# for opensrf authorization. If the script runs more than once, it will use those 
+# already-created rows in the DB. 
+
+# It will not run on the whole database. It only looks at patrons who have overdue items 
+# inside the last 48 hour period AND who do not have penalties 1,2,3,4
+
+# Feel free to alter the DB query on line 114 to meet your search needs.
+
 
 # Example usage:
-# ./recalc_penalties_direct.pl
+# ./recalc_penalties_direct.pl log.log
 #
 
 #use strict; use warnings;
@@ -117,7 +112,6 @@ if($valid)
 		my $script = OpenILS::Utils::Cronscript->new;
 		
 		my $query = "select distinct usr,(select home_ou from actor.usr where id=a.usr) from action.circulation a where due_date> (now()-('48 hours'::interval)) and due_date<now() and xact_finish is null and checkin_time is null and usr not in (select usr from actor.usr_standing_penalty) order by (select home_ou from actor.usr where id=a.usr)";
-#		my $query = "select id,home_ou from actor.usr where id in(95685,122669,25615,20905)";
 		my @results = @{$dbHandler->query($query)};
 		my $total = $#results+1;
 		$log->addLogLine("$total users to check");
@@ -257,6 +251,8 @@ sub createDBUser
 
 sub deleteDBUser
 {
+	#This code is not used. DB triggers prevents the deletion of actor.usr.
+	#I left this function as informational.
 	my $dbHandler = @_[0];
 	my @usrcreds = @{@_[1]};
 	my $query = "delete from actor.usr where usrname='".@usrcreds[0]."'";
