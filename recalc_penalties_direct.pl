@@ -129,7 +129,7 @@ if($valid)
 			
 			if($lastou!=$ou)
 			{
-				$log->addLogLine("Changing OU");
+				#$log->addLogLine("Changing OU");
 				my @usrcreds = @{createDBUser($dbHandler,$mobutil,$ou)};
 				if(@usrcreds[3])
 				{
@@ -178,7 +178,7 @@ if($valid)
 		}
 		$output=substr($output,0,-1);
 		$log->addLogLine($output);
-		$log->addLogLine("Updated $updatecount users");
+		$log->addLogLine("Updated $updatecount / $total users");
 		
 	}
 }
